@@ -1,3 +1,7 @@
+// used to verify-
+// crc out= 1617404739
+
+
 ///////////////////////////////////////
 /// 640x480 version!
 /// test VGA with hardware video input copy to VGA
@@ -33,10 +37,14 @@ void *h2p_lw_virtual_base;
 volatile unsigned int * lw_pio_ptr = NULL ;
 volatile unsigned int * lw_pio_read_ptr = NULL ;
 
+volatile unsigned int * crc_print_ptr = NULL ;
+
 // read offset is 0x10 for both busses
 // remember that eaxh axi master bus needs unique address
 #define FPGA_PIO_READ	0x10
 #define FPGA_PIO_WRITE	0x00
+
+#define PIO_CRC_OUT_OFFSET 0x30
 
 
 // /dev/mem file id
@@ -84,21 +92,28 @@ int main(void)
 	axi_pio_ptr =(unsigned int *)(h2p_virtual_base);
 	axi_pio_read_ptr =(unsigned int *)(h2p_virtual_base + FPGA_PIO_READ);
 	//============================================
+
+	// Get the addresses that map to crc print output register
+	crc_print_ptr = (unsigned int *)(h2p_lw_virtual_base + PIO_CRC_OUT_OFFSET);
 	
 	
 	while(1) 
 	{
-		int num, pio_read;
-		int junk; 
-		// input a number
-		junk = scanf("%d", &num);
+		// int num, pio_read;
+		// int junk; 
+		// // input a number
+		// junk = scanf("%d", &num);
 		
-		// send to PIOs
-		*(lw_pio_ptr)  = num ;
-		*(axi_pio_ptr) = num ;
+		// // send to PIOs
+		// *(lw_pio_ptr)  = num ;
+		// *(axi_pio_ptr) = num ;
 		
-		// receive back and print
-		printf("pio in=%d %d\n\r", *(lw_pio_read_ptr), *(axi_pio_read_ptr)) ;
+		// // receive back and print
+		// printf("pio in=%d %d\n\r", *(lw_pio_read_ptr), *(axi_pio_read_ptr)) ;
+		printf("crc out= %u \n\r", *(crc_print_ptr)) ;
+		// printf("crc out= %d \n\r", 2953);
+
+		
 		
 	} // end while(1)
 } // end main
