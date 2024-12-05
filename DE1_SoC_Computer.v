@@ -169,7 +169,8 @@ module DE1_SoC_Computer (
 	HPS_USB_DATA,
 	HPS_USB_DIR,
 	HPS_USB_NXT,
-	HPS_USB_STP
+	HPS_USB_STP,
+	
 );
 
 //=======================================================
@@ -353,6 +354,9 @@ input						HPS_USB_DIR;
 input						HPS_USB_NXT;
 output					HPS_USB_STP;
 
+wire						CLOCK_25;
+
+
 //=======================================================
 //  REG/WIRE declarations
 //=======================================================
@@ -372,6 +376,24 @@ output					HPS_USB_STP;
 //HexDigit Digit2(HEX2, hex3_hex0[11:8]);
 //HexDigit Digit3(HEX3, hex3_hex0[15:12]);
 
+
+ //=======================================================
+//  Ethernet
+//=======================================================
+
+//crc pins
+wire		[ 31: 0]	crc_result_print;
+//
+//mac mac1(
+//	.clk(CLOCK_25),
+//	.out_frame() 
+//);
+
+crc32 crc (
+	.crc_in(temp), 
+	.crc_out(crc_result_print)
+);
+ 
 //=======================================================
 //  LED code
 //=======================================================
@@ -379,7 +401,7 @@ output					HPS_USB_STP;
 
 
 led_blink blink (
-	.clk(CLOCK_50),
+	.clk(CLOCK_25),
 	.led(LEDR)
 	);
 	
@@ -393,15 +415,27 @@ gpio_toggle toggle (
 	.clk(CLOCK_50),
 	.gpio(GPIO_1)
 	);
+	
+	//=======================================================
+//  Ethernet transmitter code
+//=======================================================
+
+
+//
+//eth_tx transmitter (
+//	.clk(CLOCK_50),
+//	.in1(),
+//	.in2()
+//	);
 
 
 //=======================================================
 // PIO state machine
 //=======================================================
 // OUTPUTs from the FPGA, INPUT to HPS
-//wire [31:0] pp_in_axi, pp_in_lw_axi ;
+wire [31:0] pp_in_axi, pp_in_lw_axi ;
 //// INPUTS to the FPGA, OUTPUT from HPS
-//wire [31:0] pp_out_axi, pp_out_lw_axi ;
+wire [31:0] pp_out_axi, pp_out_lw_axi ;
 //
 //// for debugging:
 //// SW[0] chooses to look at AXI input or output on HEX display
@@ -425,13 +459,19 @@ Computer_System The_System (
 	.system_pll_ref_clk_clk					(CLOCK_50),
 	.system_pll_ref_reset_reset			(1'b0),
 	
+	.clock_25_clk                    (CLOCK_25),                    //                clock_25.clk
+//	.clock_25_locked_export          (<connected-to-clock_25_locked_export>)           //         clock_25_locked.export
+	
 	////////////////////////////////////
 	// PIO ports
 	////////////////////////////////////
 	.pp_out_axi_export               (pp_out_axi),               
 	.pp_in_axi_export                (pp_in_axi),              
 	.pp_out_lw_axi_export            (pp_out_lw_axi), 
-	.pp_in_lw_axi_export             (pp_in_lw_axi),  
+	.pp_in_lw_axi_export             (pp_in_lw_axi),
+
+	.crc_result_print_export         (crc_result_print),         //        crc_result_print.export
+		
 
 	////////////////////////////////////
 	// HPS Side
@@ -504,7 +544,7 @@ Computer_System The_System (
 	// LED
 	.hps_io_hps_io_gpio_inst_GPIO53	(HPS_LED),
 	
-	.led_external_connection_export  (led),   // led_external_connection.export ADDED
+//	.led_external_connection_export  (led),   // led_external_connection.export ADDED
 
 	// SD Card
 	.hps_io_hps_io_sdio_inst_CMD	(HPS_SD_CMD),
@@ -537,7 +577,9 @@ Computer_System The_System (
 	.hps_io_hps_io_usb1_inst_CLK		(HPS_USB_CLKOUT),
 	.hps_io_hps_io_usb1_inst_STP		(HPS_USB_STP),
 	.hps_io_hps_io_usb1_inst_DIR		(HPS_USB_DIR),
-	.hps_io_hps_io_usb1_inst_NXT		(HPS_USB_NXT)
+	.hps_io_hps_io_usb1_inst_NXT		(HPS_USB_NXT),
+	
+
 );
 endmodule // end top level
 
@@ -581,7 +623,6 @@ module gpio_toggle (
 	reg [25:0] counter; 
 	
 	initial begin
-//		gpio = 36'b010101010101010101010101010101010101; // Alternate 1 and 0 across the 36 GPIO pins	
 		gpio = 36'b0;
 	end
 	
@@ -589,16 +630,190 @@ module gpio_toggle (
 
 	always @(posedge clk) begin
 		if (counter >= COUNT_LIMIT) begin
-			gpio = ~gpio;
-//			for (i = 0; i < 36; i=i+1) begin
-//				gpio[i] = ~gpio[i];
-//		   end				
+			gpio = ~gpio;				
 			counter <= 0;
 		end else begin
 			counter <= counter + 1;
 		end
 	end
 endmodule
+
+
+
+
+/// Frame Checking Sequence (Cyclic Redundancy Check) ////////////////////////////
+
+module crc32 (
+    input [527:0] crc_in,   // Input data (384 bits)
+    output reg [31:0] crc_out  // Output CRC32 result
+);
+    wire [527:0] crc_in_wire;
+	 reg [31:0] crc_out_temp;
+	 wire [31:0] compl;
+    integer i;
+    parameter POLY = 32'h04C11DB7; // CRC polynomial coefficients: = x^32 + x26 + x23 + x22 + x16 + x12 + x11 + x10 + x8 + x7 + x5 + x4 + x2 + x + 1 (0x4611DB7)
+
+	 assign compl = ~crc_in[527:496];
+	 assign crc_in_wire = {compl, crc_in[495:0]};
+		
+    always @(crc_in_wire) begin
+		crc_out_temp = 32'hFFFFFFFF;
+		 for (i = 0; i < 528; i = i + 1) begin
+            crc_out_temp = (crc_out_temp << 1) ^ (crc_out_temp[31] ^ crc_in_wire[i] ? POLY : 32'b0);
+       end
+		 crc_out = ~crc_out_temp; // Complement the result to get final CRC
+	end
+
+endmodule
+
+
+
+/// Ethernet transmitter - MAC layer //////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+//+---------------+--------------+----------------------+-----------------+--------------+----------------------+--------------------+
+//| Preamble (7B) | SFD (1 byte) | Destination MAC (6B) | Source MAC (6B) | Length (2B)  | Data (46–1500 bytes) | CRC (4 bytes)      |
+//+---------------+--------------+----------------------+-----------------+--------------+----------------------+--------------------+
+
+module mac (
+	input clk,
+	output reg [591:0] out_frame
+);
+	parameter preamble = 56'hAA_AA_AA_AA_AA_AA_AA;    // 7-byte preamble
+	parameter SFD      = 8'hAB;                       // 1-byte SFD
+	parameter D_MAC    = 48'h1C_BF_C0_A4_D8_77;       // Destination MAC (PC)
+	parameter S_MAC    = 48'h12_34_56_78_90_10;       // Source MAC		(FPGA)
+	parameter length   = 16'h004A;                    // Payload length (here: 74 bytes)
+	parameter data     = 384'hF012_3456_78AB_CDEF_0012_3456_78AB_CDEF_0012_3456_78AB_CDEF_0012_3456_78AB_CDEF_F012_3456_78AB_CDEF_0012_3456_78AB_CDEF;
+	
+	// Concatenate Ethernet frame fields excluding the preamble and SFD for CRC calculation	
+	wire [527:0] temp = {D_MAC, S_MAC, length, data, 32'b0};
+	wire [31:0] crc_out;
+//	
+	crc32 crc (
+		.crc_in(temp), 
+		.crc_out(crc_out)
+	);
+	
+	assign crc_out_reg = crc_out; //crc out= 2152362721
+
+	// Assign the complete frame
+	always @(posedge clk) begin
+		out_frame <= {preamble, SFD, D_MAC, S_MAC, length, data, crc_out}; // Full Ethernet frame with CRC
+	end
+
+
+endmodule
+
+/// Ethernet transmitter - PHY layer //////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// Using 100BASE-TX standard (100Mbps)
+//
+//module phy (
+//    input tx_clk,              // 25 MHz clock
+//    input reset,               // Reset signal
+//    input [591:0] mac_frame,   // Complete Ethernet frame from 
+//    inout reg tx_en           // Transmit enable line
+//    output reg tx_data,        // Transmitted data line
+//);
+//
+//reg [9:0] bit_index = 0; // Index to track current bit being transmitted (591 - 0)
+//reg [3:0] txd;           // Data to be sent (4 bits at a time)
+//
+//	// Generate TX_EN and TXD
+//	always @(posedge tx_clk) begin
+//        if (bit_index < 592) begin
+//            tx_en <= 1;                              						 // Assert TX_EN
+//            txd <= out_frame[ (591- bit_index) : (588- bit_index) ];  // Extract 4 bits
+//            bit_index <= bit_index + 4;             						 // Move to the next 4 bits
+//        end else begin
+//            tx_en <= 0; // Deassert TX_EN when frame is fully transmitted
+//            bit_index <= 0; // Reset for next frame
+//        end
+//    end else begin
+//        tx_en <= 0; // Idle state
+//	end
+//
+//endmodule
+
+
+/// ARBITRAGE TRADING FSM //////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+module trade (
+    input clk,
+    input reset,
+    input wire [15:0] price_a,  // Price from Exchange A
+    input wire [15:0] price_b,  // Price from Exchange B
+    input wire [15:0] price_c,  // Price from Exchange C
+    output reg [1:0] action_a,   // Action for Exchange A
+    output reg [1:0] action_b,   // Action for Exchange B
+    output reg [1:0] action_c    // Action for Exchange C
+);
+
+parameter HOLD = 2'b00, BUY = 2'b01, SELL = 2'b10;
+reg [15:0] threshold;
+
+initial begin
+    threshold = 16'd1;
+end
+
+always @(*) begin
+    if (reset) begin
+        action_a = HOLD;
+        action_b = HOLD;
+        action_c = HOLD;
+    end else begin
+        // Reset actions
+        action_a = HOLD;
+        action_b = HOLD;
+        action_c = HOLD;
+
+        // Arbitrage conditions
+        if ((price_a > price_b + threshold) && (price_b > price_c + threshold)) begin
+            action_a = SELL;
+            action_b = HOLD;
+            action_c = BUY;
+        end else if ((price_b > price_a + threshold) && (price_a > price_c + threshold)) begin
+            action_a = HOLD;
+            action_b = SELL;
+            action_c = BUY;
+        end else if ((price_a > price_c + threshold) && (price_c > price_b + threshold)) begin
+            action_a = SELL;
+            action_b = BUY;
+            action_c = HOLD;
+        end else if ((price_c > price_a + threshold) && (price_a > price_b + threshold)) begin
+            action_a = HOLD;
+            action_b = BUY;
+            action_c = SELL;
+        end else if ((price_c > price_b + threshold) && (price_b > price_a + threshold)) begin
+            action_a = BUY;
+            action_b = HOLD;
+            action_c = SELL;
+        end else if ((price_b > price_c + threshold) && (price_c > price_a + threshold)) begin
+            action_a = BUY;
+            action_b = SELL;
+            action_c = HOLD;
+        end
+    end
+end
+
+always @(posedge clk) begin
+    if (action_a == SELL) $display("Sell A");
+    else if (action_b == SELL) $display("Sell B");
+    else if (action_c == SELL) $display("Sell C");
+    else $display("All HOLD");
+end
+
+always @(posedge clk) begin
+    if (action_a == BUY) $display("Buy A\n\n");
+    else if (action_b == BUY) $display("Buy B\n\n");
+    else if (action_c == BUY) $display("Buy C\n\n");
+end
+
+endmodule
+
+
+
+
 
 //============================================================
 // M10K module for testing
