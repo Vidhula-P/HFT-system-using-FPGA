@@ -37,6 +37,12 @@
 //#define HW_REGS_SPAN        0x00200000 
 #define HW_REGS_SPAN          0x00005000 
 
+
+//PIO base addresses
+#define action_a_base		  0x00004060
+// #define price_b_input		  0x00004020
+// #define price_c_input		  0x00004040
+
 // graphics primitives
 void VGA_text (int, int, char *);
 void VGA_text_clear();
@@ -80,6 +86,9 @@ void *vga_pixel_virtual_base;
 // character buffer
 volatile unsigned int * vga_char_ptr = NULL ;
 void *vga_char_virtual_base;
+
+// character buffer
+volatile unsigned int * lw_action_a_pio_ptr = NULL ;
 
 // /dev/mem file id
 int fd;
@@ -154,6 +163,9 @@ int main(void)
     // Get the address that maps to the FPGA pixel buffer
 	vga_pixel_ptr =(unsigned int *)(vga_pixel_virtual_base);
 
+	//mapping action_a
+	lw_action_a_pio_ptr = (unsigned int*)(h2p_lw_virtual_base + action_a_base);
+
 	// ===========================================
 
 	/* create a message to be displayed on the VGA 
@@ -226,7 +238,11 @@ int main(void)
     }
 
     printf("Waiting for packets...\n");
-	char buffer[1024];;
+	char buffer[1024];
+
+
+	printf("action_a = %d:\n", *lw_action_a_pio_ptr); // received from FPGA
+
 	
 	while(1) 
 	{
@@ -595,6 +611,7 @@ void VGA_line(int x1, int y1, int x2, int y2, short c) {
 	signed int s1,s2, xchange;
      signed int x,y;
 	char *pixel_ptr ;
+
 	
 	/* check and fix line coordinates to be valid */
 	if (x1>639) x1 = 639;
