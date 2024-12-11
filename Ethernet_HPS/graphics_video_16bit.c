@@ -39,9 +39,15 @@
 
 
 //PIO base addresses
+#define reset_base 		  0x1000
+
 #define action_a_base		  0x00004060
-// #define price_b_input		  0x00004020
-// #define price_c_input		  0x00004040
+#define action_b_base		  0x00004080
+#define action_c_base		  0x000040A0
+
+#define price_a_base		  0x00004000
+#define price_b_base		  0x00004020
+#define price_c_base		  0x00004040
 
 // graphics primitives
 void VGA_text (int, int, char *);
@@ -87,8 +93,17 @@ void *vga_pixel_virtual_base;
 volatile unsigned int * vga_char_ptr = NULL ;
 void *vga_char_virtual_base;
 
-// character buffer
-volatile unsigned int * lw_action_a_pio_ptr = NULL ;
+//reset signal
+volatile unsigned int *reset_pio_output = NULL;
+
+// actions buffer
+volatile unsigned int * lw_action_a_ptr = NULL ;
+volatile unsigned int * lw_action_b_ptr = NULL ;
+volatile unsigned int * lw_action_c_ptr = NULL ;
+
+volatile unsigned int * lw_price_a_ptr = NULL ;
+volatile unsigned int * lw_price_b_ptr = NULL ;
+volatile unsigned int * lw_price_c_ptr = NULL ;
 
 // /dev/mem file id
 int fd;
@@ -163,8 +178,19 @@ int main(void)
     // Get the address that maps to the FPGA pixel buffer
 	vga_pixel_ptr =(unsigned int *)(vga_pixel_virtual_base);
 
-	//mapping action_a
-	lw_action_a_pio_ptr = (unsigned int*)(h2p_lw_virtual_base + action_a_base);
+	reset_pio_output = (unsigned int *)(h2p_lw_virtual_base + reset_base);
+
+	//mapping actions
+	lw_action_a_ptr = (unsigned int*)(h2p_lw_virtual_base + action_a_base);
+	lw_action_b_ptr = (unsigned int*)(h2p_lw_virtual_base + action_b_base);
+	lw_action_c_ptr = (unsigned int*)(h2p_lw_virtual_base + action_c_base);
+
+	
+	//mapping prices
+	lw_price_a_ptr = (unsigned int*)(h2p_lw_virtual_base + price_a_base);
+	lw_price_b_ptr = (unsigned int*)(h2p_lw_virtual_base + price_b_base);
+	lw_price_c_ptr = (unsigned int*)(h2p_lw_virtual_base + price_c_base);
+
 
 	// ===========================================
 
@@ -240,14 +266,41 @@ int main(void)
     printf("Waiting for packets...\n");
 	char buffer[1024];
 
+	//VGA_box(int x1, int y1, int x2, int y2, short pixel_color)
+	VGA_box(64, 0, 240, 50, blue); // blue box
+	VGA_box(250, 0, 425, 50, red); // red box
+	VGA_box(435, 0, 600, 50, green); // green box
 
-	printf("action_a = %d:\n", *lw_action_a_pio_ptr); // received from FPGA
+
+	//printf("action_a = %d:\n", *lw_action_a_ptr); // received from FPGA
+	*lw_price_a_ptr = 0;
+	*lw_price_b_ptr = 0;
+	*lw_price_c_ptr = 0;
 
 	
 	while(1) 
 	{
-		// start timer
-		//gettimeofday(&t1, NULL);
+		// Call the function to check for incoming packets
+        char* data = check_for_packets(sockfd, &client_addr, &addr_len);
+        if (data) {
+            printf("Received: %s\n", data);
+			VGA_text_clear();
+			VGA_text(10,4,data);
+			
+			//logic to extract price_a, price_b and price_c
+			char stock_name[10];
+			int price_a, price_b, price_c;
+			sscanf(data, "%[^,],%u,%u,%u", stock_name, &price_a, &price_b, &price_c);
+			*lw_price_a_ptr = (unsigned int)price_a;
+			*lw_price_b_ptr = (unsigned int)price_b;
+			*lw_price_c_ptr = (unsigned int)price_c; 
+
+			printf("price_a = %u, price_b = %u, price_c = %u:\n", *lw_price_a_ptr, *lw_price_b_ptr, *lw_price_c_ptr); // to send to FPGA
+			printf("action_a = %u, action_b = %u, action_c = %u:\n", *lw_action_a_ptr, *lw_action_b_ptr, *lw_action_c_ptr); // received from FPGA
+			
+			// Clear the buffer after processing
+            memset(data, 0, 1024);
+        }
 	
 		//VGA_box(int x1, int y1, int x2, int y2, short pixel_color)
 		VGA_box(64, 0, 240, 50, blue); // blue box
@@ -272,39 +325,6 @@ int main(void)
 		VGA_rect(10, 478, box_x, 478-box_x, rand()&0xffff);
 		box_x += 3 ;
 		if (box_x > 195) box_x = 10;
-		
-		// //void VGA_line(int x1, int y1, int x2, int y2, short c)
-		// VGA_line(210+(rand()&0x7f), 350+(rand()&0x7f), 210+(rand()&0x7f), 
-		// 		350+(rand()&0x7f), colors[color_index]);
-		
-		// // void VGA_Vline(int x1, int y1, int y2, short pixel_color)
-		// VGA_Vline(Vline_x, 475, 475-(Vline_x>>2), rand()&0xffff);
-		// Vline_x += 2 ;
-		// if (Vline_x > 620) Vline_x = 350;
-		
-		// //void VGA_Hline(int x1, int y1, int x2, short pixel_color)
-		// VGA_Hline(400, Hline_y, 550, rand()&0xffff);
-		// Hline_y += 2 ;
-		// if (Hline_y > 400) Hline_y = 240;
-		
-		// stop timer
-		/*gettimeofday(&t2, NULL);
-		elapsedTime = (t2.tv_sec - t1.tv_sec) * 1000000.0;      // sec to us
-		elapsedTime += (t2.tv_usec - t1.tv_usec) ;   // us 
-		sprintf(time_string, "T = %6.0f uSec  ", elapsedTime);
-		VGA_text (10, 4, time_string);*/
-		// set frame rate
-		//usleep(17000);
-
-		// Call the function to check for incoming packets
-        char* data = check_for_packets(sockfd, &client_addr, &addr_len);
-        if (data) {
-            printf("Received: %s\n", data);
-			VGA_text_clear();
-			VGA_text(10,4,data);
-			// Clear the buffer after processing
-            memset(data, 0, 1024);
-        }
 		
 	} // end while(1)
 } // end main
