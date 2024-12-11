@@ -170,14 +170,6 @@ module DE1_SoC_Computer (
 	HPS_USB_DIR,
 	HPS_USB_NXT,
 	HPS_USB_STP,
-	
-	//PIO connections
-//	price_a_input,
-//	price_b_input,
-//	price_c_input,
-//	action_a_output,
-//	action_b_output,
-//	action_c_output
 );
 
 //=======================================================
@@ -387,27 +379,34 @@ HexDigit Digit3(HEX3, hex3_hex0[15:12]);
 //=======================================================
 
 //PIO pins
-wire       [15: 0]  price_a_input;
-wire       [15: 0]  price_b_input;
-wire       [15: 0]  price_c_input;
+wire 					 reset;
+
+reg       [15: 0]  price_a_input;
+reg       [15: 0]  price_b_input;
+reg       [15: 0]  price_c_input;
 
 wire		  [ 1: 0]  action_a_output;
 wire		  [ 1: 0]  action_b_output;
 wire		  [ 1: 0]  action_c_output;
 
-assign action_a_output = 2'd3;
+//initial begin
+//	price_a_input = 16'd200;
+//	price_b_input = 16'd300;
+//	price_c_input = 16'd400;
+//end
 
 
-//trade t1(
-// .clk(clk),
-// .reset(reset),
-// .price_a(price_a_input),  // Price from Exchange A
-// .price_b(price_b_input),  // Price from Exchange B
-// .price_c(price_c_input),  // Price from Exchange C
-// .action_a(action_a_output),   // Action for Exchange A
-// .action_b(action_b_output),   // Action for Exchange B
-// .action_c(action_c_output)    // Action for Exchange C
-//);
+//
+trade t1(
+ .clk(CLOCK_50), //using the 50 MHz clock
+ //.reset(reset), //connected, beed to initialize when other things are working
+ .price_a(price_a_input),  // Price from Exchange A
+ .price_b(price_b_input),  // Price from Exchange B
+ .price_c(price_c_input),  // Price from Exchange C
+ .action_a(action_a_output),   // Action for Exchange A
+ .action_b(action_b_output),   // Action for Exchange B
+ .action_c(action_c_output)    // Action for Exchange C
+);
 
 //=======================================================
 //  Structural coding
@@ -555,6 +554,8 @@ Computer_System The_System (
 	.hps_io_hps_io_usb1_inst_NXT		(HPS_USB_NXT),
 	
 	//GPIO pins for data transfer from HPS
+	.reset_signal_export             (reset),              				//         reset_signal.export
+	
 	.price_a_export                  (price_a_input),                  //              price_a.export
 	.price_b_export                  (price_b_input),                  //              price_b.export
 	.price_c_export                  (price_c_input),                   //              price_c.export
@@ -570,9 +571,9 @@ endmodule
 
 
 
-module trade (
+module  trade(
     input clk,
-    input reset,
+    //input reset,
     input wire [15:0] price_a,  // Price from Exchange A
     input wire [15:0] price_b,  // Price from Exchange B
     input wire [15:0] price_c,  // Price from Exchange C
@@ -582,22 +583,32 @@ module trade (
 );
 
 parameter HOLD = 2'b00, BUY = 2'b01, SELL = 2'b10;
-reg [15:0] threshold;
+parameter threshold = 16'd0;
 
-initial begin
-    threshold = 16'd1;
-end
+//assign LEDR[1:0] = action_a_output;  // Map actions to LEDs
+//assign LEDR[2]   = 1'b0;
+//assign LEDR[4:3] = action_b_output;
+//assign LEDR[2:5] = 1'b0;
+//assign LEDR[7:6] = action_c_output;
+//assign LEDR[9:8] = 2'b0;
+
+//always @(*) begin
+//	action_a = 2'd1;
+//	action_b = 2'd2;
+//	action_c = 2'd3;
+//end
+
 
 always @(*) begin
-    if (reset) begin
-        action_a = HOLD;
-        action_b = HOLD;
-        action_c = HOLD;
-    end else begin
+//    if (reset) begin
+//        action_a = HOLD;
+//        action_b = HOLD;
+//        action_c = HOLD;
+//    end else begin
         // Reset actions
-        action_a = HOLD;
-        action_b = HOLD;
-        action_c = HOLD;
+        action_a = 2'b11; //unrelated value to signify setup
+        action_b = 2'b11;
+        action_c = 2'b11;
 
         // Arbitrage conditions
         if ((price_a > price_b + threshold) && (price_b > price_c + threshold)) begin
@@ -625,20 +636,20 @@ always @(*) begin
             action_b = SELL;
             action_c = HOLD;
         end
-    end
+    //end
 end
 
-always @(posedge clk) begin
-    if (action_a == SELL) $display("Sell A");
-    else if (action_b == SELL) $display("Sell B");
-    else if (action_c == SELL) $display("Sell C");
-    else $display("All HOLD");
-end
-
-always @(posedge clk) begin
-    if (action_a == BUY) $display("Buy A\n\n");
-    else if (action_b == BUY) $display("Buy B\n\n");
-    else if (action_c == BUY) $display("Buy C\n\n");
-end
+//always @(posedge clk) begin
+//    if (action_a == SELL) $display("Sell A");
+//    else if (action_b == SELL) $display("Sell B");
+//    else if (action_c == SELL) $display("Sell C");
+//    else $display("All HOLD");
+//end
+//
+//always @(posedge clk) begin
+//    if (action_a == BUY) $display("Buy A\n\n");
+//    else if (action_b == BUY) $display("Buy B\n\n");
+//    else if (action_c == BUY) $display("Buy C\n\n");
+//end
 
 endmodule
