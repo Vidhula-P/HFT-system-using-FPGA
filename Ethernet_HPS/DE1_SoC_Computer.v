@@ -169,7 +169,15 @@ module DE1_SoC_Computer (
 	HPS_USB_DATA,
 	HPS_USB_DIR,
 	HPS_USB_NXT,
-	HPS_USB_STP
+	HPS_USB_STP,
+	
+	//PIO connections
+//	price_a_input,
+//	price_b_input,
+//	price_c_input,
+//	action_a_output,
+//	action_b_output,
+//	action_c_output
 );
 
 //=======================================================
@@ -353,6 +361,8 @@ input						HPS_USB_DIR;
 input						HPS_USB_NXT;
 output					HPS_USB_STP;
 
+
+
 //=======================================================
 //  REG/WIRE declarations
 //=======================================================
@@ -371,6 +381,33 @@ HexDigit Digit0(HEX0, hex3_hex0[3:0]);
 HexDigit Digit1(HEX1, hex3_hex0[7:4]);
 HexDigit Digit2(HEX2, hex3_hex0[11:8]);
 HexDigit Digit3(HEX3, hex3_hex0[15:12]);
+
+//=======================================================
+// Instatiating the trade module
+//=======================================================
+
+//PIO pins
+wire       [15: 0]  price_a_input;
+wire       [15: 0]  price_b_input;
+wire       [15: 0]  price_c_input;
+
+wire		  [ 1: 0]  action_a_output;
+wire		  [ 1: 0]  action_b_output;
+wire		  [ 1: 0]  action_c_output;
+
+assign action_a_output = 2'd3;
+
+
+//trade t1(
+// .clk(clk),
+// .reset(reset),
+// .price_a(price_a_input),  // Price from Exchange A
+// .price_b(price_b_input),  // Price from Exchange B
+// .price_c(price_c_input),  // Price from Exchange C
+// .action_a(action_a_output),   // Action for Exchange A
+// .action_b(action_b_output),   // Action for Exchange B
+// .action_c(action_c_output)    // Action for Exchange C
+//);
 
 //=======================================================
 //  Structural coding
@@ -515,8 +552,93 @@ Computer_System The_System (
 	.hps_io_hps_io_usb1_inst_CLK		(HPS_USB_CLKOUT),
 	.hps_io_hps_io_usb1_inst_STP		(HPS_USB_STP),
 	.hps_io_hps_io_usb1_inst_DIR		(HPS_USB_DIR),
-	.hps_io_hps_io_usb1_inst_NXT		(HPS_USB_NXT)
+	.hps_io_hps_io_usb1_inst_NXT		(HPS_USB_NXT),
+	
+	//GPIO pins for data transfer from HPS
+	.price_a_export                  (price_a_input),                  //              price_a.export
+	.price_b_export                  (price_b_input),                  //              price_b.export
+	.price_c_export                  (price_c_input),                   //              price_c.export
+	.action_a_export                 (action_a_output),                 //             action_a.export
+	.action_b_export                 (action_b_output),                 //             action_b.export
+	.action_c_export                 (action_c_output)                  //             action_c.export
 );
 
+
+endmodule
+
+/// ARBITRAGE TRADING FSM //////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+module trade (
+    input clk,
+    input reset,
+    input wire [15:0] price_a,  // Price from Exchange A
+    input wire [15:0] price_b,  // Price from Exchange B
+    input wire [15:0] price_c,  // Price from Exchange C
+    output reg [1:0] action_a,   // Action for Exchange A
+    output reg [1:0] action_b,   // Action for Exchange B
+    output reg [1:0] action_c    // Action for Exchange C
+);
+
+parameter HOLD = 2'b00, BUY = 2'b01, SELL = 2'b10;
+reg [15:0] threshold;
+
+initial begin
+    threshold = 16'd1;
+end
+
+always @(*) begin
+    if (reset) begin
+        action_a = HOLD;
+        action_b = HOLD;
+        action_c = HOLD;
+    end else begin
+        // Reset actions
+        action_a = HOLD;
+        action_b = HOLD;
+        action_c = HOLD;
+
+        // Arbitrage conditions
+        if ((price_a > price_b + threshold) && (price_b > price_c + threshold)) begin
+            action_a = SELL;
+            action_b = HOLD;
+            action_c = BUY;
+        end else if ((price_b > price_a + threshold) && (price_a > price_c + threshold)) begin
+            action_a = HOLD;
+            action_b = SELL;
+            action_c = BUY;
+        end else if ((price_a > price_c + threshold) && (price_c > price_b + threshold)) begin
+            action_a = SELL;
+            action_b = BUY;
+            action_c = HOLD;
+        end else if ((price_c > price_a + threshold) && (price_a > price_b + threshold)) begin
+            action_a = HOLD;
+            action_b = BUY;
+            action_c = SELL;
+        end else if ((price_c > price_b + threshold) && (price_b > price_a + threshold)) begin
+            action_a = BUY;
+            action_b = HOLD;
+            action_c = SELL;
+        end else if ((price_b > price_c + threshold) && (price_c > price_a + threshold)) begin
+            action_a = BUY;
+            action_b = SELL;
+            action_c = HOLD;
+        end
+    end
+end
+
+always @(posedge clk) begin
+    if (action_a == SELL) $display("Sell A");
+    else if (action_b == SELL) $display("Sell B");
+    else if (action_c == SELL) $display("Sell C");
+    else $display("All HOLD");
+end
+
+always @(posedge clk) begin
+    if (action_a == BUY) $display("Buy A\n\n");
+    else if (action_b == BUY) $display("Buy B\n\n");
+    else if (action_c == BUY) $display("Buy C\n\n");
+end
 
 endmodule
