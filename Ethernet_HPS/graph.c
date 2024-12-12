@@ -209,16 +209,16 @@ int main(void)
             VGA_PIXEL(screen_x2, screen_y2, green);  
 
             screen_x3 = x3[i]*0.5; // Scale up for visualization (example scaling factor)
-            screen_y3 = (y3[i]*0.5)+319;  
+            screen_y3 = (y3[i]*0.5)+239;  
             screen_x3_prev = x3[i-1]*0.5; // Scale up for visualization (example scaling factor)
-            screen_y3_prev = (y3[i-1]*0.5)+319;   
+            screen_y3_prev = (y3[i-1]*0.5)+239;   
             VGA_line(screen_x3_prev, screen_y3_prev, screen_x3, screen_y3, magenta);
             VGA_PIXEL(screen_x3, screen_y3, green);   
 
             screen_x4 = (x4[i]*0.5)+319; // Scale up for visualization (example scaling factor)
-            screen_y4 = (y4[i]*0.5)+319;  
+            screen_y4 = (y4[i]*0.5)+239;  
             screen_x4_prev = (x4[i-1]*0.5)+319; // Scale up for visualization (example scaling factor)
-            screen_y4_prev = (y4[i-1]*0.5)+319;   
+            screen_y4_prev = (y4[i-1]*0.5)+239;   
             VGA_line(screen_x4_prev, screen_y4_prev, screen_x4, screen_y4, red);
             VGA_PIXEL(screen_x4, screen_y4, green);   
         }	 
