@@ -51,10 +51,16 @@
 
 #define SCREEN_WIDTH 319
 #define SCREEN_HEIGHT 239
-#define Q2_X_MIN 0
-#define Q2_X_MAX 159
-#define Q2_Y_MIN 120
-#define Q2_Y_MAX 239
+
+#define Q1_X_MIN 10
+#define Q1_X_MAX 300
+#define Q1_Y_MIN 10
+#define Q1_Y_MAX 230
+
+#define Q2_X_MIN 325
+#define Q2_X_MAX  630
+#define Q2_Y_MIN 10
+#define Q2_Y_MAX 230
 
 // graphics primitives
 void VGA_text (int, int, char *);
@@ -137,132 +143,107 @@ char* check_for_packets(int sockfd, struct sockaddr_in* client_addr, socklen_t* 
     return NULL;            // Default case (should not occur)
 }
 
-void display_unit(int *x, int* y1, int* y2, int* y3, int* y4, int size){
-	// Display unit
+void display_unit(int *x, int *y1, int size) {
+    // Display unit
 
-	// cycle thru the colors
-	if (color_index++ == 11) color_index = 0;
+    // Cycle through the colors
+    if (color_index++ == 11) color_index = 0;
 
-	int i;
+    int i;
 
-	int max_x = x[size-1];
-	int min_x = x[0];
-	int max_y1 = y1[0];
-	int min_y1 = y1[0];
-	// int max_y2 = y2[0];
-	// int min_y2 = y2[0];
-	// int max_y3 = y3[0];
-	// int min_y3 = y3[0];
-	// int max_y4 = y4[0];
-	// int min_y4 = y4[0];
-
-	for (i = 1; i < size; i++){
-		max_y1 = (y1[i] > max_y1) ? y1[i] : max_y1;
-		min_y1 = (y1[i] < min_y1) ? y1[i] : min_y1;
-		// max_y2 = (y2[i] > max_y2) ? y2[i] : max_y2;
-		// min_y2 = (y2[i] < min_y2) ? y2[i] : min_y2;
-		// max_y3 = (y3[i] > max_y3) ? y3[i] : max_y3;
-		// min_y3 = (y3[i] < min_y3) ? y3[i] : min_y3;
-		// max_y4 = (y4[i] > max_y4) ? y4[i] : max_y4;
-		// min_y4 = (y4[i] < min_y4) ? y4[i] : min_y4;
-	}
-
-
-	int screen_x1, screen_y1, screen_x1_prev, screen_y1_prev;
-	// int screen_x2, screen_y2, screen_x2_prev, screen_y2_prev;
-	// int screen_x3, screen_y3, screen_x3_prev, screen_y3_prev;
-	// int screen_x4, screen_y4, screen_x4_prev, screen_y4_prev;
-
-	int padding = 2;
-	float x_scale1 = 319.0 / (max_x - min_x);
-	float y_scale1 = 239.0 / (max_y1 - min_y1);	
-	// float x_scale2 = 319.0 / (max_x - min_x);
-	// float y_scale2 = 239.0 / (max_y2 - min_y2);
-	// float x_scale3 = 319.0 / (max_x - min_x);
-	// float y_scale3 = 239.0 / (max_y3 - min_y3);
-	// float x_scale4 = 319.0 / (max_x - min_x);
-	// float y_scale4 = 239.0 / (max_y4 - min_y4);
+    int max_x = x[size - 1];
+    int min_x = x[0];
+    int max_y1 = y1[0];
+    int min_y1 = y1[0];
 
 	for (i = 1; i < size; i++) {
-		// Quadrant 1
-		int screen_x1 = (x[i] - min_x) * x_scale1;
-		int screen_y1 = (y1[i] - min_y1) * y_scale1;
-		int screen_x1_prev = (x[i - 1] - min_x) * x_scale1;
-		int screen_y1_prev = (y1[i - 1] - min_y1) * y_scale1;
-		VGA_line(screen_x1_prev, screen_y1_prev, screen_x1, screen_y1, colors[color_index]);
-		VGA_PIXEL(screen_x1, screen_y1, green);
+        max_y1 = (y1[i] > max_y1) ? y1[i] : max_y1;
+        min_y1 = (y1[i] < min_y1) ? y1[i] : min_y1;
+    }
 
-		// Quadrant 2
-		// int screen_x2 = (x[i] * 0.5) + 319;
-		// int screen_y2 = (y2[i] * 0.5);
-		// int screen_x2_prev = (x[i - 1] * 0.5) + 319;
-		// int screen_y2_prev = (y2[i - 1] * 0.5);
-		// VGA_line(screen_x2_prev, screen_y2_prev, screen_x2, screen_y2, colors[color_index]);
-		// VGA_PIXEL(screen_x2, screen_y2, green);
+    float x_scale = (float)(Q1_X_MAX - Q1_X_MIN) / (max_x - min_x);
+    float y_scale = (float)(Q1_Y_MAX - Q1_Y_MIN) / (max_y1 - min_y1);
 
-		// // Quadrant 3
-		// int screen_x3 = x[i] * 0.5;
-		// int screen_y3 = (y3[i] * 0.5) + 239;
-		// int screen_x3_prev = x[i - 1] * 0.5;
-		// int screen_y3_prev = (y3[i - 1] * 0.5) + 239;
-		// VGA_line(screen_x3_prev, screen_y3_prev, screen_x3, screen_y3, colors[color_index]);
-		// VGA_PIXEL(screen_x3, screen_y3, green);
+    for (i = 1; i < size; i++) {
+        // Quadrant 1 - map to defined screen area
+        int screen_x1 = Q1_X_MIN + (x[i] - min_x) * x_scale;
+        int screen_y1 = Q1_Y_MAX - (y1[i] - min_y1) * y_scale;
+        int screen_x1_prev = Q1_X_MIN + (x[i - 1] - min_x) * x_scale;
+        int screen_y1_prev = Q1_Y_MAX - (y1[i - 1] - min_y1) * y_scale;
 
-		// // Quadrant 4
-		// int screen_x4 = (x[i] * 0.5) + 319;
-		// int screen_y4 = (y4[i] * 0.5) + 239;
-		// int screen_x4_prev = (x[i - 1] * 0.5) + 319;
-		// int screen_y4_prev = (y4[i - 1] * 0.5) + 239;
-		// VGA_line(screen_x4_prev, screen_y4_prev, screen_x4, screen_y4, colors[color_index]);
-		// VGA_PIXEL(screen_x4, screen_y4, green);
-	}	 
-	// Draw X-axis
-	VGA_line(0, 240, 639, 240, white);  // Horizontal center line
+        // Draw line between points
+        VGA_line(screen_x1_prev, screen_y1_prev, screen_x1, screen_y1, colors[color_index]);
 
-	// Draw Y-axis
-	VGA_line(320, 0, 320, 479, white);  // Vertical center line	
+        // Highlight the point
+        // VGA_PIXEL(screen_x1, screen_y1, green);
+    }
+
+    // Draw X-axis
+    VGA_line(Q1_X_MIN, Q1_Y_MAX, Q1_X_MAX, Q1_Y_MAX, white);  // Adjusted to defined range
+
+    // Draw Y-axis
+    VGA_line(Q1_X_MIN, Q1_Y_MIN, Q1_X_MIN, Q1_Y_MAX, white);  // Adjusted to defined range
 }
 
 
+
 void plot_stock_price_trends(int* x, int* price_a, int* price_b, int* price_c, int size) {
-    // Calculate scales for Quadrant 2
-    float x_scale = (float)(Q2_X_MAX - Q2_X_MIN) / (x[size - 1] - x[0]); // Based on time range
-    float y_scale = (float)(Q2_Y_MAX - Q2_Y_MIN) / 2000; // Assuming max price is 2000 (adjust if needed)
+    // Calculate min and max for dynamic scaling
+    int max_x = x[size - 1];
+    int min_x = x[0];
+    int max_price = price_a[0];
+    int min_price = price_a[0];
 	int i;
+    for (i = 1; i < size; i++) {
+        if (price_a[i] > max_price) max_price = price_a[i];
+        if (price_b[i] > max_price) max_price = price_b[i];
+        if (price_c[i] > max_price) max_price = price_c[i];
+        if (price_a[i] < min_price) min_price = price_a[i];
+        if (price_b[i] < min_price) min_price = price_b[i];
+        if (price_c[i] < min_price) min_price = price_c[i];
+    }
+
+    // Scaling factors for Quadrant 2
+    float x_scale = (float)(Q2_X_MAX - Q2_X_MIN) / (max_x - min_x);
+    float y_scale = (float)(Q2_Y_MAX - Q2_Y_MIN) / (max_price - min_price);
 
     // Draw lines for price_a, price_b, and price_c
     for (i = 1; i < size; i++) {
         // Calculate screen coordinates for price_a
-        int screen_x1_a = Q2_X_MIN + (x[i - 1] - x[0]) * x_scale;
-        int screen_y1_a = Q2_Y_MAX - (price_a[i - 1] * y_scale);
-        int screen_x2_a = Q2_X_MIN + (x[i] - x[0]) * x_scale;
-        int screen_y2_a = Q2_Y_MAX - (price_a[i] * y_scale);
+        int screen_x1_a = Q2_X_MIN + (x[i - 1] - min_x) * x_scale;
+        int screen_y1_a = Q2_Y_MAX - (price_a[i - 1] - min_price) * y_scale;
+        int screen_x2_a = Q2_X_MIN + (x[i] - min_x) * x_scale;
+        int screen_y2_a = Q2_Y_MAX - (price_a[i] - min_price) * y_scale;
 
         // Calculate screen coordinates for price_b
-        int screen_x1_b = Q2_X_MIN + (x[i - 1] - x[0]) * x_scale;
-        int screen_y1_b = Q2_Y_MAX - (price_b[i - 1] * y_scale);
-        int screen_x2_b = Q2_X_MIN + (x[i] - x[0]) * x_scale;
-        int screen_y2_b = Q2_Y_MAX - (price_b[i] * y_scale);
+        int screen_x1_b = Q2_X_MIN + (x[i - 1] - min_x) * x_scale;
+        int screen_y1_b = Q2_Y_MAX - (price_b[i - 1] - min_price) * y_scale;
+        int screen_x2_b = Q2_X_MIN + (x[i] - min_x) * x_scale;
+        int screen_y2_b = Q2_Y_MAX - (price_b[i] - min_price) * y_scale;
 
         // Calculate screen coordinates for price_c
-        int screen_x1_c = Q2_X_MIN + (x[i - 1] - x[0]) * x_scale;
-        int screen_y1_c = Q2_Y_MAX - (price_c[i - 1] * y_scale);
-        int screen_x2_c = Q2_X_MIN + (x[i] - x[0]) * x_scale;
-        int screen_y2_c = Q2_Y_MAX - (price_c[i] * y_scale);
+        int screen_x1_c = Q2_X_MIN + (x[i - 1] - min_x) * x_scale;
+        int screen_y1_c = Q2_Y_MAX - (price_c[i - 1] - min_price) * y_scale;
+        int screen_x2_c = Q2_X_MIN + (x[i] - min_x) * x_scale;
+        int screen_y2_c = Q2_Y_MAX - (price_c[i] - min_price) * y_scale;
 
         // Plot lines for price_a
         VGA_line(screen_x1_a, screen_y1_a, screen_x2_a, screen_y2_a, red);
-        // VGA_PIXEL(screen_x2_a, screen_y2_a, white);
 
         // Plot lines for price_b
         VGA_line(screen_x1_b, screen_y1_b, screen_x2_b, screen_y2_b, green);
-        // VGA_PIXEL(screen_x2_b, screen_y2_b, white);
 
         // Plot lines for price_c
         VGA_line(screen_x1_c, screen_y1_c, screen_x2_c, screen_y2_c, blue);
-        // VGA_PIXEL(screen_x2_c, screen_y2_c, white);
     }
+
+	// Draw X-axis
+    VGA_line(Q2_X_MIN, Q2_Y_MAX, Q2_X_MAX, Q2_Y_MAX, white);  // Adjusted to defined range
+
+    // Draw Y-axis
+    VGA_line(Q2_X_MIN, Q2_Y_MIN, Q2_X_MIN, Q2_Y_MAX, white);  // Adjusted to defined range
 }
+
 
 
 	
@@ -332,10 +313,10 @@ int main(void)
 
 	/* create a message to be displayed on the VGA 
           and LCD displays */
-	char quad1_title[40] = "Title 1\0";
-	char quad2_title[40] = "Title 2\0";
-	char quad3_title[40] = "Title 3\0";
-	char quad4_title[40] = "Title 4\0";
+	char quad1_title[50] = "XYZ firm profits\0";
+	char quad2_title[50] = "ASE vs BSE vs CSE\0";
+	// char quad3_title[40] = "Title 3\0";
+	// char quad4_title[40] = "Title 4\0";
 	char num_string[20], time_string[20] ;
 	int color_counter = 0 ;
 	
@@ -358,9 +339,8 @@ int main(void)
 	VGA_text_clear();
 	// write text
 	VGA_text (15, 1, quad1_title);
-	VGA_text (55, 1, quad2_title);
-	VGA_text (15, 31, quad3_title);
-	VGA_text (55, 31, quad4_title);
+	VGA_text (48, 1, quad2_title);
+
 	// VGA_text (64, 58, quad4_title);
 	
 	// R bits 11-15 mask 0xf800
@@ -442,7 +422,7 @@ int main(void)
 
 	
 	while(1) 
-	{
+	{		
 		// Call the function to check for incoming packets
 		char* data = check_for_packets(sockfd, &client_addr, &addr_len);
 		static int count = 0; 
@@ -489,7 +469,7 @@ int main(void)
 
 			// Shift y1 values back when buffer is full
 			if (flag16) {
-				VGA_box (0, 0, 319, 239, 0x0000);
+				VGA_box (0, 0, 639, 479, 0x0000);
 				for (i = 0; i < size - 1; i++) {
 					y1[i] = y1[i + 1];
 				}
@@ -512,13 +492,16 @@ int main(void)
 		}
 
 		// Placeholder y2, y3, y4 arrays
-		int y2[16] = {100, 120, 140, 160, 180, 200, 220, 240, 260, 280, 300, 320, 340, 360, 380, 400};
-		int y3[16] = {100, 120, 140, 160, 180, 200, 220, 240, 260, 280, 300, 320, 340, 360, 380, 400};
-		int y4[16] = {100, 120, 140, 160, 180, 200, 220, 240, 260, 280, 300, 320, 340, 360, 380, 400};
+		// int y2[16] = {100, 120, 140, 160, 180, 200, 220, 240, 260, 280, 300, 320, 340, 360, 380, 400};
+		// int y3[16] = {100, 120, 140, 160, 180, 200, 220, 240, 260, 280, 300, 320, 340, 360, 380, 400};
+		// int y4[16] = {100, 120, 140, 160, 180, 200, 220, 240, 260, 280, 300, 320, 340, 360, 380, 400};
 
 		// Update the display with the new data
-		display_unit(x, y1, y2, y3, y4, size);
+		display_unit(x, y1, size);
+		VGA_text (15, 31, ("Mean: " + string(100)) );
+
 		plot_stock_price_trends(x, a_array, b_array, c_array, size);
+		VGA_text (55, 31, quad4_title);
 	} // end while(1)
 
 } // end main
