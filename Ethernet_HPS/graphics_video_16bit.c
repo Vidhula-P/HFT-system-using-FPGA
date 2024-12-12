@@ -112,6 +112,8 @@ int fd;
 struct timeval t1, t2;
 double elapsedTime;
 
+char color_index = 0 ; //declared as global variable so it can be incremented in while(1) of main
+
 // Function to check for packets and return the received buffer
 char* check_for_packets(int sockfd, struct sockaddr_in* client_addr, socklen_t* addr_len) {
     static char buffer[1024]; // Static buffer to persist after function returns
@@ -126,6 +128,92 @@ char* check_for_packets(int sockfd, struct sockaddr_in* client_addr, socklen_t* 
         return NULL;        // Error case
     }
     return NULL;            // Default case (should not occur)
+}
+
+void display_unit(int *x, int* y1, int* y2, int* y3, int* y4, int size){
+	// Display unit
+
+	// cycle thru the colors
+	if (color_index++ == 11) color_index = 0;
+
+	int i;
+
+	int max_x = x[size-1];
+	int min_x = x[0];
+	int max_y1 = y1[0];
+	int min_y1 = y1[0];
+	int max_y2 = y2[0];
+	int min_y2 = y2[0];
+	int max_y3 = y3[0];
+	int min_y3 = y3[0];
+	int max_y4 = y4[0];
+	int min_y4 = y4[0];
+
+	for (i = 1; i < size; i++){
+		max_y1 = (y1[i] > max_y1) ? y1[i] : max_y1;
+		min_y1 = (y1[i] < min_y1) ? y1[i] : min_y1;
+		max_y2 = (y2[i] > max_y2) ? y2[i] : max_y2;
+		min_y2 = (y2[i] < min_y2) ? y2[i] : min_y2;
+		max_y3 = (y3[i] > max_y3) ? y3[i] : max_y3;
+		min_y3 = (y3[i] < min_y3) ? y3[i] : min_y3;
+		max_y4 = (y4[i] > max_y4) ? y4[i] : max_y4;
+		min_y4 = (y4[i] < min_y4) ? y4[i] : min_y4;
+	}
+
+
+	int screen_x1, screen_y1, screen_x1_prev, screen_y1_prev;
+	int screen_x2, screen_y2, screen_x2_prev, screen_y2_prev;
+	int screen_x3, screen_y3, screen_x3_prev, screen_y3_prev;
+	int screen_x4, screen_y4, screen_x4_prev, screen_y4_prev;
+
+	int padding = 2;
+	float x_scale1 = 319.0 / (max_x - min_x);
+	float y_scale1 = 239.0 / (max_y1 - min_y1);	
+	float x_scale2 = 319.0 / (max_x - min_x);
+	float y_scale2 = 239.0 / (max_y2 - min_y2);
+	float x_scale3 = 319.0 / (max_x - min_x);
+	float y_scale3 = 239.0 / (max_y3 - min_y3);
+	float x_scale4 = 319.0 / (max_x - min_x);
+	float y_scale4 = 239.0 / (max_y4 - min_y4);
+
+	for (i = 1; i < size; i++) {
+		// Quadrant 1
+		int screen_x1 = (x[i] - min_x) * x_scale1;
+		int screen_y1 = (y1[i] - min_y1) * y_scale1;
+		int screen_x1_prev = (x[i - 1] - min_x) * x_scale1;
+		int screen_y1_prev = (y1[i - 1] - min_y1) * y_scale1;
+		VGA_line(screen_x1_prev, screen_y1_prev, screen_x1, screen_y1, colors[color_index]);
+		VGA_PIXEL(screen_x1, screen_y1, green);
+
+		// Quadrant 2
+		int screen_x2 = (x[i] * 0.5) + 319;
+		int screen_y2 = (y2[i] * 0.5);
+		int screen_x2_prev = (x[i - 1] * 0.5) + 319;
+		int screen_y2_prev = (y2[i - 1] * 0.5);
+		VGA_line(screen_x2_prev, screen_y2_prev, screen_x2, screen_y2, colors[color_index]);
+		VGA_PIXEL(screen_x2, screen_y2, green);
+
+		// Quadrant 3
+		int screen_x3 = x[i] * 0.5;
+		int screen_y3 = (y3[i] * 0.5) + 239;
+		int screen_x3_prev = x[i - 1] * 0.5;
+		int screen_y3_prev = (y3[i - 1] * 0.5) + 239;
+		VGA_line(screen_x3_prev, screen_y3_prev, screen_x3, screen_y3, colors[color_index]);
+		VGA_PIXEL(screen_x3, screen_y3, green);
+
+		// Quadrant 4
+		int screen_x4 = (x[i] * 0.5) + 319;
+		int screen_y4 = (y4[i] * 0.5) + 239;
+		int screen_x4_prev = (x[i - 1] * 0.5) + 319;
+		int screen_y4_prev = (y4[i - 1] * 0.5) + 239;
+		VGA_line(screen_x4_prev, screen_y4_prev, screen_x4, screen_y4, colors[color_index]);
+		VGA_PIXEL(screen_x4, screen_y4, green);
+	}	 
+	// Draw X-axis
+	VGA_line(0, 240, 639, 240, white);  // Horizontal center line
+
+	// Draw Y-axis
+	VGA_line(320, 0, 320, 479, white);  // Vertical center line	
 }
 
 
@@ -196,11 +284,11 @@ int main(void)
 
 	/* create a message to be displayed on the VGA 
           and LCD displays */
-	char text_top_row[40] = "DE1-SoC ARM/FPGA\0";
-	char text_bottom_row[40] = "Cornell ece5760\0";
-	char text_next[40] = "Graphics primitives\0";
+	char quad1_title[40] = "Title 1\0";
+	char quad2_title[40] = "Title 2\0";
+	char quad3_title[40] = "Title 3\0";
+	char quad4_title[40] = "Title 4\0";
 	char num_string[20], time_string[20] ;
-	char color_index = 0 ;
 	int color_counter = 0 ;
 	
 	// position of disk primitive
@@ -214,16 +302,18 @@ int main(void)
 	// position of horizontal line primitive
 	int Hline_y = 250;
 
-	//VGA_text (34, 1, text_top_row);
-	//VGA_text (34, 2, text_bottom_row);
+	//VGA_text (34, 1, quad1_title);
+	//VGA_text (34, 2, quad4_title);
 	// clear the screen
 	VGA_box (0, 0, 639, 479, 0x0000);
 	// clear the text
 	VGA_text_clear();
 	// write text
-	VGA_text (10, 1, text_top_row);
-	VGA_text (10, 2, text_bottom_row);
-	VGA_text (10, 3, text_next);
+	VGA_text (15, 1, quad1_title);
+	VGA_text (55, 1, quad2_title);
+	VGA_text (15, 31, quad3_title);
+	VGA_text (55, 31, quad4_title);
+	// VGA_text (64, 58, quad4_title);
 	
 	// R bits 11-15 mask 0xf800
 	// G bits 5-10  mask 0x07e0
@@ -266,67 +356,105 @@ int main(void)
     printf("Waiting for packets...\n");
 	char buffer[1024];
 
-	//VGA_box(int x1, int y1, int x2, int y2, short pixel_color)
-	VGA_box(64, 0, 240, 50, blue); // blue box
-	VGA_box(250, 0, 425, 50, red); // red box
-	VGA_box(435, 0, 600, 50, green); // green box
-
 
 	//printf("action_a = %d:\n", *lw_action_a_ptr); // received from FPGA
 	*lw_price_a_ptr = 0;
 	*lw_price_b_ptr = 0;
 	*lw_price_c_ptr = 0;
 
+
+	// Constant x values for time stamps
+	int x[] = { 100, 120, 140, 160, 180, 200, 220, 240, 260, 280, 300, 320, 340, 360, 380, 400 };
+	int num_timestamps = 16;
+	
+	// Dynamic arrays for asset and profit tracking
+	int *y1 = (int *)malloc(num_timestamps);
+	if (!y1) {
+		perror("Memory allocation failed for y1");
+		return -1;
+	}
+	
+	// Initialize y1 with initial asset value (e.g., beginning balance)
+	y1[0] = 1000; // Beginning balance
+
+	int y2[] = { 100, 120, 140, 160, 180, 200, 220, 240, 260, 280, 300, 320, 340, 360, 380, 400 };
+	int y3[] = { 100, 120, 140, 160, 180, 200, 220, 240, 260, 280, 300, 320, 340, 360, 380, 400 };
+	int y4[] = { 100, 120, 140, 160, 180, 200, 220, 240, 260, 280, 300, 320, 340, 360, 380, 400 };
+
+	int price_a, price_b, price_c;
+	int action_a, action_b, action_c;
+
 	
 	while(1) 
 	{
 		// Call the function to check for incoming packets
-        char* data = check_for_packets(sockfd, &client_addr, &addr_len);
-        if (data) {
-            printf("Received: %s\n", data);
-			VGA_text_clear();
-			VGA_text(10,4,data);
+		char* data = check_for_packets(sockfd, &client_addr, &addr_len);
+		static int count = 0; 
+		static char flag16 = 0; 
+		int profit = 0; // Reset profit for every iteration
+
+		if (data) {
+			printf("Received: %s\n", data);
 			
-			//logic to extract price_a, price_b and price_c
+			// Logic to extract price_a, price_b, and price_c
 			char stock_name[10];
-			int price_a, price_b, price_c;
 			sscanf(data, "%[^,],%u,%u,%u", stock_name, &price_a, &price_b, &price_c);
 			*lw_price_a_ptr = (unsigned int)price_a;
 			*lw_price_b_ptr = (unsigned int)price_b;
 			*lw_price_c_ptr = (unsigned int)price_c; 
+			printf("price_a = %u, price_b = %u, price_c = %u\n", *lw_price_a_ptr, *lw_price_b_ptr, *lw_price_c_ptr); // To send to FPGA
 
-			printf("price_a = %u, price_b = %u, price_c = %u:\n", *lw_price_a_ptr, *lw_price_b_ptr, *lw_price_c_ptr); // to send to FPGA
-			printf("action_a = %u, action_b = %u, action_c = %u:\n", *lw_action_a_ptr, *lw_action_b_ptr, *lw_action_c_ptr); // received from FPGA
-			
+			action_a = *lw_action_a_ptr;
+			action_b = *lw_action_b_ptr;
+			action_c = *lw_action_c_ptr;
+			printf("action_a = %u, action_b = %u, action_c = %u\n", action_a, action_b, action_c); // Received from FPGA
+
+			if (action_a == 2) profit += price_a;        // Selling at high price
+			else if (action_b == 2) profit += price_b;
+			else if (action_c == 2) profit += price_c; 
+
+			if (action_a == 1) profit -= price_a;        // Buying at low price
+			else if (action_b == 1) profit -= price_b;
+			else if (action_c == 1) profit -= price_c;
+
+			// Update y1 array with the new transaction result
+			if (count > 0) {
+				y1[count] = y1[count - 1] + profit;
+			} else {
+				y1[count] = 100 + profit; // Starting balance is 100
+			}
+
+			if (count == 15) {
+				flag16 = 1;
+			} else {
+				count++;
+			}
+
+			// Shift y1 values back when buffer is full
+			if (flag16) {
+				int i;
+				VGA_box (0, 0, 319, 239, 0x0000);
+				for (i = 0; i < 15; i++) {
+					y1[i] = y1[i + 1];
+				}
+				y1[15] = y1[14] + profit; // Add the latest profit
+			}
+
 			// Clear the buffer after processing
-            memset(data, 0, 1024);
-        }
-	
-		//VGA_box(int x1, int y1, int x2, int y2, short pixel_color)
-		VGA_box(64, 0, 240, 50, blue); // blue box
-		VGA_box(250, 0, 425, 50, red); // red box
-		VGA_box(435, 0, 600, 50, green); // green box
-		
-		// cycle thru the colors
-		if (color_index++ == 11) color_index = 0;
-		
-		//void VGA_disc(int x, int y, int r, short pixel_color)
-		VGA_disc(disc_x, 100, 20, colors[color_index]);
-		disc_x += 35 ;
-		if (disc_x > 640) disc_x = 0;
-		
-		// //void VGA_circle(int x, int y, int r, short pixel_color)
-		// /*VGA_circle(320, 200, circle_x, colors[color_index]);
-		// VGA_circle(320, 200, circle_x+1, colors[color_index]);
-		// circle_x += 2 ;
-		// if (circle_x > 99) circle_x = 0;*/
-		
-		//void VGA_rect(int x1, int y1, int x2, int y2, short pixel_color)
-		VGA_rect(10, 478, box_x, 478-box_x, rand()&0xffff);
-		box_x += 3 ;
-		if (box_x > 195) box_x = 10;
-		
+			// memset(data, 0, 1024);
+		}
+
+		// Placeholder y2, y3, y4 arrays
+		int y2[16] = {100, 120, 140, 160, 180, 200, 220, 240, 260, 280, 300, 320, 340, 360, 380, 400};
+		int y3[16] = {100, 120, 140, 160, 180, 200, 220, 240, 260, 280, 300, 320, 340, 360, 380, 400};
+		int y4[16] = {100, 120, 140, 160, 180, 200, 220, 240, 260, 280, 300, 320, 340, 360, 380, 400};
+
+		int size = 16;
+
+		// Update the display with the new data
+		display_unit(x, y1, y2, y3, y4, size);
 	} // end while(1)
+
 } // end main
 
 /****************************************************************************************
