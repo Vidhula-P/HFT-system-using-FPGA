@@ -245,6 +245,14 @@ void plot_stock_price_trends(int* x, int* price_a, int* price_b, int* price_c, i
 }
 
 
+float calculate_mean(int *array, int size) {
+    int sum = 0, i;
+    for (i = 0; i < size; i++) {
+        sum += array[i];
+    }
+    return (float)sum / size;
+}
+
 
 	
 int main(void)
@@ -313,7 +321,7 @@ int main(void)
 
 	/* create a message to be displayed on the VGA 
           and LCD displays */
-	char quad1_title[50] = "XYZ firm profits\0";
+	char quad1_title[50] = "Asset value over time\0";
 	char quad2_title[50] = "ASE vs BSE vs CSE\0";
 	// char quad3_title[40] = "Title 3\0";
 	// char quad4_title[40] = "Title 4\0";
@@ -419,7 +427,10 @@ int main(void)
 	int a_array[16] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 	int b_array[16] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 	int c_array[16] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+	char* buy = "   ";
+	char* sell = "   ";
 
+	char stock_name[10];
 	
 	while(1) 
 	{		
@@ -429,12 +440,13 @@ int main(void)
 		static char flag16 = 0; 
 		int profit = 0; // Reset profit for every iteration
 		int i;
-
+		price_a = 0;
+		price_b = 0;
+		price_c = 0;
 		if (data) {
 			printf("Received: %s\n", data);
 			
 			// Logic to extract price_a, price_b, and price_c
-			char stock_name[10];
 			sscanf(data, "%[^,],%u,%u,%u", stock_name, &price_a, &price_b, &price_c);
 			*lw_price_a_ptr = (unsigned int)price_a;
 			*lw_price_b_ptr = (unsigned int)price_b;
@@ -446,13 +458,31 @@ int main(void)
 			action_c = *lw_action_c_ptr;
 			printf("action_a = %u, action_b = %u, action_c = %u\n", action_a, action_b, action_c); // Received from FPGA
 
-			if (action_a == 2) profit += price_a;        // Selling at high price
-			else if (action_b == 2) profit += price_b;
-			else if (action_c == 2) profit += price_c; 
+			if (action_a == 2) { // Selling at high price
+				profit += price_a;
+				sell = "ASE";
+			}        
+			else if (action_b == 2) {
+				profit += price_b;
+				sell = "BSE";
+			}
+			else if (action_c == 2) {
+				profit += price_c;
+				sell = "CSE";
+			}
 
-			if (action_a == 1) profit -= price_a;        // Buying at low price
-			else if (action_b == 1) profit -= price_b;
-			else if (action_c == 1) profit -= price_c;
+			if (action_a == 1) { // Buying at low price
+				profit -= price_a;
+				buy = "ASE";
+			}        
+			else if (action_b == 1) {
+				profit -= price_b;
+				buy = "BSE";
+			}
+			else if (action_c == 1) {
+				profit -= price_c;
+				buy = "CSE";
+			}
 
 			// Update y1 array with the new transaction result
 			if (count > 0) {
@@ -498,10 +528,32 @@ int main(void)
 
 		// Update the display with the new data
 		display_unit(x, y1, size);
-		VGA_text (15, 31, ("Mean: " + string(100)) );
-
 		plot_stock_price_trends(x, a_array, b_array, c_array, size);
-		VGA_text (55, 31, quad4_title);
+
+		// float mean_y1 = calculate_mean(y1, size);
+		// float mean_b = calculate_mean(buy, size);
+		// float mean_s = calculate_mean(sell, size);
+
+		// Display means on the screen
+		char mean_text[100];
+		snprintf(mean_text, sizeof(mean_text), "Stock price of %s in ASE: %d", stock_name, price_a);
+		VGA_text(10, 35, mean_text);
+
+		snprintf(mean_text, sizeof(mean_text),  "Stock price of %s in BSE: %d", stock_name, price_b);
+		VGA_text(10, 37, mean_text);
+
+		snprintf(mean_text, sizeof(mean_text),  "Stock price of %s in CSE: %d", stock_name, price_c);
+		VGA_text(10, 39, mean_text);
+
+		snprintf(mean_text, sizeof(mean_text), "Decision-  Buy: %s and Sell: %s", buy, sell);
+		VGA_text(10, 41, mean_text);
+
+		snprintf(mean_text, sizeof(mean_text), "Profit: %d", profit);
+		VGA_text(10, 43, mean_text);
+
+		snprintf(mean_text, sizeof(mean_text), "Total asset: %d", y1[15]);
+		VGA_text(10, 43, mean_text);
+
 	} // end while(1)
 
 } // end main
