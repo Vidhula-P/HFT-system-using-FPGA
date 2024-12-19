@@ -45,6 +45,8 @@
 #define action_b_base		  0x00004080
 #define action_c_base		  0x000040A0
 
+#define stock_id_base		 0x000040C0
+
 #define price_a_base		  0x00004000
 #define price_b_base		  0x00004020
 #define price_c_base		  0x00004040
@@ -95,6 +97,7 @@ int colors[] = {red, dark_red, green, dark_green, blue, dark_blue,
 	*(short *)pixel_ptr = (color);\
 } while(0)
 
+
 // the light weight buss base
 void *h2p_lw_virtual_base;
 
@@ -114,6 +117,7 @@ volatile unsigned int * lw_action_a_ptr = NULL ;
 volatile unsigned int * lw_action_b_ptr = NULL ;
 volatile unsigned int * lw_action_c_ptr = NULL ;
 
+volatile unsigned int * lw_stock_id_ptr = NULL ;
 volatile unsigned int * lw_price_a_ptr = NULL ;
 volatile unsigned int * lw_price_b_ptr = NULL ;
 volatile unsigned int * lw_price_c_ptr = NULL ;
@@ -126,6 +130,59 @@ struct timeval t1, t2;
 double elapsedTime;
 
 char color_index = 0 ; //declared as global variable so it can be incremented in while(1) of main
+
+#define buffer_size 16  // Maximum size of the circular array
+
+// Define the StockData structure
+typedef struct {
+    char stock_name[10];
+    unsigned int price_a;
+    unsigned int price_b;
+    unsigned int price_c;
+    int action_a;
+    int action_b;
+    int action_c;
+} StockData;
+
+// Circular Array Structure
+typedef struct {
+    StockData *array;
+    int head;
+    int tail;
+    int size;
+    int capacity;
+} CircularArray;
+
+// Initialize the Circular Array
+CircularArray* initCircularArray(int capacity) {
+    CircularArray *circularArray = (CircularArray*) malloc(sizeof(CircularArray));
+    circularArray->array = (StockData*) malloc(capacity * sizeof(StockData));
+    circularArray->head = 0;
+    circularArray->tail = 0;
+    circularArray->size = 0;
+    circularArray->capacity = capacity;
+    return circularArray;
+}
+
+// Enqueue a new StockData into the circular array
+void enqueue(CircularArray *circularArray, StockData data) {
+    if (circularArray->size == circularArray->capacity) {
+        // Buffer is full, overwrite the oldest data
+        circularArray->head = (circularArray->head + 1) % circularArray->capacity;
+    } else {
+        circularArray->size++;
+    }
+    circularArray->array[circularArray->tail] = data;
+    circularArray->tail = (circularArray->tail + 1) % circularArray->capacity;
+}
+
+// Dequeue a StockData from the circular array
+StockData dequeue(CircularArray *circularArray) {
+    StockData data = circularArray->array[circularArray->head];
+    circularArray->head = (circularArray->head + 1) % circularArray->capacity;
+    circularArray->size--;
+    return data;
+}
 
 // Function to check for packets and return the received buffer
 char* check_for_packets(int sockfd, struct sockaddr_in* client_addr, socklen_t* addr_len) {
@@ -143,7 +200,7 @@ char* check_for_packets(int sockfd, struct sockaddr_in* client_addr, socklen_t* 
     return NULL;            // Default case (should not occur)
 }
 
-void display_unit(int *x, int *y1, int size) {
+void asset_increase_q1(int *x, int *y1, int size) {
     // Display unit
 
     // Cycle through the colors
@@ -186,8 +243,7 @@ void display_unit(int *x, int *y1, int size) {
 }
 
 
-
-void plot_stock_price_trends(int* x, int* price_a, int* price_b, int* price_c, int size) {
+void stock_price_trends_q2(int* x, int* price_a, int* price_b, int* price_c, int size) {
     // Calculate min and max for dynamic scaling
     int max_x = x[size - 1];
     int min_x = x[0];
@@ -258,10 +314,7 @@ float calculate_mean(int *array, int size) {
 int main(void)
 {
   	
-	// === need to mmap: =======================
-	// FPGA_CHAR_BASE
-	// FPGA_ONCHIP_BASE      
-	// HW_REGS_BASE        
+	CircularArray *circularArray = initCircularArray(buffer_size);     
   
 	// === get FPGA addresses ==================
     // Open /dev/mem
@@ -311,7 +364,8 @@ int main(void)
 	lw_action_c_ptr = (unsigned int*)(h2p_lw_virtual_base + action_c_base);
 
 	
-	//mapping prices
+	//mapping id and prices
+	lw_stock_id_ptr = (unsigned int*)(h2p_lw_virtual_base + stock_id_base);
 	lw_price_a_ptr = (unsigned int*)(h2p_lw_virtual_base + price_a_base);
 	lw_price_b_ptr = (unsigned int*)(h2p_lw_virtual_base + price_b_base);
 	lw_price_c_ptr = (unsigned int*)(h2p_lw_virtual_base + price_c_base);
@@ -394,6 +448,7 @@ int main(void)
 
 
 	//printf("action_a = %d:\n", *lw_action_a_ptr); // received from FPGA
+	*lw_stock_id_ptr = 0;
 	*lw_price_a_ptr = 0;
 	*lw_price_b_ptr = 0;
 	*lw_price_c_ptr = 0;
@@ -401,45 +456,44 @@ int main(void)
 
 	// Constant x values for time stamps
 	int x[] = { 100, 120, 140, 160, 180, 200, 220, 240, 260, 280, 300, 320, 340, 360, 380, 400 };
-	int num_timestamps = 16;
+	int num_timestamps = buffer_size;
 	
-	// Dynamic arrays for asset and profit tracking
-	int *y1 = (int *)malloc(num_timestamps*sizeof(int));
-	if (!y1) {
+	// Array for asset/profit tracking
+	int *asset = (int *)malloc(num_timestamps*sizeof(int));
+	if (!asset) {
 		perror("Memory allocation failed for y1");
 		return -1;
 	}
 	
-	// Initialize y1 with initial asset value (e.g., beginning balance)
-	y1[0] = 1000; // Beginning balance
+	// Initialize asset with initial asset value (e.g., beginning balance)
+	asset[0] = 100; // Beginning balance
 
-	int y2[] = { 100, 120, 140, 160, 180, 200, 220, 240, 260, 280, 300, 320, 340, 360, 380, 400 };
-	int y3[] = { 100, 120, 140, 160, 180, 200, 220, 240, 260, 280, 300, 320, 340, 360, 380, 400 };
-	int y4[] = { 100, 120, 140, 160, 180, 200, 220, 240, 260, 280, 300, 320, 340, 360, 380, 400 };
-
-	int price_a, price_b, price_c;
+	int stock_id, price_a, price_b, price_c;
 	int action_a, action_b, action_c;
-	int size = 16;
-	// int *a_array = (int *)malloc(size*sizeof(int));
-	// int *b_array = (int *)malloc(size*sizeof(int));
-	// int *c_array = (int *)malloc(size*sizeof(int));
 
-	int a_array[16] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
-	int b_array[16] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
-	int c_array[16] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+	int a_array[buffer_size];
+	int b_array[buffer_size];
+	int c_array[buffer_size];
 	char* buy = "   ";
 	char* sell = "   ";
 
 	char stock_name[10];
+
+	*reset_pio_output = 0;
+	*reset_pio_output = 1;
+	usleep(5);
+	*reset_pio_output = 0;
+
 	
-	while(1) 
+	while (1) 
 	{		
 		// Call the function to check for incoming packets
 		char* data = check_for_packets(sockfd, &client_addr, &addr_len);
-		static int count = 0; 
+		static int next_index = 1; 
 		static char flag16 = 0; 
 		int profit = 0; // Reset profit for every iteration
 		int i;
+		stock_id = 0;
 		price_a = 0;
 		price_b = 0;
 		price_c = 0;
@@ -448,10 +502,33 @@ int main(void)
 			
 			// Logic to extract price_a, price_b, and price_c
 			sscanf(data, "%[^,],%u,%u,%u", stock_name, &price_a, &price_b, &price_c);
+			if (strcmp(stock_name, "AAPL") == 0) {
+				stock_id = 0;
+			} else if (strcmp(stock_name, "GOOG") == 0) {
+				stock_id = 1;
+			} else if (strcmp(stock_name, "MSFT") == 0) {
+				stock_id = 2;
+			} else if (strcmp(stock_name, "TSLA") == 0) {
+				stock_id = 3;
+			}
+
+			StockData newData;
+			strcpy(newData.stock_name, stock_name);
+			newData.price_a = price_a;
+			newData.price_b = price_b;
+			newData.price_c = price_c;
+			newData.action_a = (strcmp(stock_name, "AAPL") == 0) ? 1 : 0;
+			newData.action_b = (strcmp(stock_name, "MSFT") == 0) ? 1 : 0;
+			newData.action_c = (strcmp(stock_name, "GOOGL") == 0) ? 1 : 0;
+
+			// Enqueue the new data into the circular array
+			enqueue(circularArray, newData);
+
+			*lw_stock_id_ptr = (unsigned int)stock_id;
 			*lw_price_a_ptr = (unsigned int)price_a;
 			*lw_price_b_ptr = (unsigned int)price_b;
 			*lw_price_c_ptr = (unsigned int)price_c; 
-			printf("price_a = %u, price_b = %u, price_c = %u\n", *lw_price_a_ptr, *lw_price_b_ptr, *lw_price_c_ptr); // To send to FPGA
+			printf("stock_id = %d, price_a = %u, price_b = %u, price_c = %u\n", *lw_stock_id_ptr, *lw_price_a_ptr, *lw_price_b_ptr, *lw_price_c_ptr); // To send to FPGA
 
 			action_a = *lw_action_a_ptr;
 			action_b = *lw_action_b_ptr;
@@ -484,65 +561,46 @@ int main(void)
 				buy = "CSE";
 			}
 
-			// Update y1 array with the new transaction result
-			if (count > 0) {
-				y1[count] = y1[count - 1] + profit;
-			} else {
-				y1[count] = 100 + profit; // Starting balance is 100
-			}
+			// Update asset array with the new transaction result
+			asset[next_index] = asset[next_index - 1] + profit;
+			next_index = (next_index + 1) % buffer_size;
+			VGA_box(0, 0, 639, 479, 0x0000);
 
-			if (count == 15) {
-				flag16 = 1;
-			} else {
-				count++;
-			}
-
-			// Shift y1 values back when buffer is full
-			if (flag16) {
-				VGA_box (0, 0, 639, 479, 0x0000);
-				for (i = 0; i < size - 1; i++) {
-					y1[i] = y1[i + 1];
-				}
-				y1[15] = y1[14] + profit; // Add the latest profit
-			}
-
-			for (i = 0; i < size-1; i++) {
+			for (i = 0; i < buffer_size-1; i++) {
 				a_array[i] = a_array[i + 1];
 				b_array[i] = b_array[i + 1];
 				c_array[i] = c_array[i + 1];
 			}
 			// Add the new value at the end
-			a_array[size-1] = price_a;
-			b_array[size-1] = price_b;
-			c_array[size-1] = price_c;
-		
+			a_array[buffer_size-1] = price_a;
+			b_array[buffer_size-1] = price_b;
+			c_array[buffer_size-1] = price_c;
 
+			// Dequeuing data from the circular array
+			if (circularArray->size > 0) {
+				StockData receivedData = dequeue(circularArray);
+				printf("Dequeued: %s %u %u %u\n", receivedData.stock_name, receivedData.price_a, receivedData.price_b, receivedData.price_c);
+			}
+
+			printf("Profit = %d", profit);
+			printf("Asset = %d", asset[15]);
 			// Clear the buffer after processing
 			memset(data, 0, 1024);
 		}
 
-		// Placeholder y2, y3, y4 arrays
-		// int y2[16] = {100, 120, 140, 160, 180, 200, 220, 240, 260, 280, 300, 320, 340, 360, 380, 400};
-		// int y3[16] = {100, 120, 140, 160, 180, 200, 220, 240, 260, 280, 300, 320, 340, 360, 380, 400};
-		// int y4[16] = {100, 120, 140, 160, 180, 200, 220, 240, 260, 280, 300, 320, 340, 360, 380, 400};
-
 		// Update the display with the new data
-		display_unit(x, y1, size);
-		plot_stock_price_trends(x, a_array, b_array, c_array, size);
-
-		// float mean_y1 = calculate_mean(y1, size);
-		// float mean_b = calculate_mean(buy, size);
-		// float mean_s = calculate_mean(sell, size);
+		asset_increase_q1(x, asset, buffer_size);
+		stock_price_trends_q2(x, a_array, b_array, c_array, buffer_size);
 
 		// Display means on the screen
-		char mean_text[100];
+		char mean_text[200];
 		snprintf(mean_text, sizeof(mean_text), "Stock price of %s in ASE: %d", stock_name, price_a);
 		VGA_text(10, 35, mean_text);
 
-		snprintf(mean_text, sizeof(mean_text),  "Stock price of %s in BSE: %d", stock_name, price_b);
+		snprintf(mean_text, sizeof(mean_text), "Stock price of %s in BSE: %d", stock_name, price_b);
 		VGA_text(10, 37, mean_text);
 
-		snprintf(mean_text, sizeof(mean_text),  "Stock price of %s in CSE: %d", stock_name, price_c);
+		snprintf(mean_text, sizeof(mean_text), "Stock price of %s in CSE: %d", stock_name, price_c);
 		VGA_text(10, 39, mean_text);
 
 		snprintf(mean_text, sizeof(mean_text), "Decision-  Buy: %s and Sell: %s", buy, sell);
@@ -551,10 +609,13 @@ int main(void)
 		snprintf(mean_text, sizeof(mean_text), "Profit: %d", profit);
 		VGA_text(10, 43, mean_text);
 
-		snprintf(mean_text, sizeof(mean_text), "Total asset: %d", y1[15]);
-		VGA_text(10, 43, mean_text);
-
+		snprintf(mean_text, sizeof(mean_text), "Total asset: %d", asset[next_index]);
+		VGA_text(10, 45, mean_text);
 	} // end while(1)
+
+	// Clean up
+	free(circularArray->array);
+	free(circularArray);
 
 } // end main
 
