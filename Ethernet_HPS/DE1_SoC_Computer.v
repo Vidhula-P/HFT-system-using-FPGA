@@ -381,9 +381,11 @@ HexDigit Digit3(HEX3, hex3_hex0[15:12]);
 //PIO pins
 wire 					 reset;
 
-reg       [15: 0]  price_a_input;
-reg       [15: 0]  price_b_input;
-reg       [15: 0]  price_c_input;
+reg        [15: 0]  price_a_input;
+reg        [15: 0]  price_b_input;
+reg        [15: 0]  price_c_input;
+
+reg 		  [ 1: 0]  stock_id_input;
 
 wire		  [ 1: 0]  action_a_output;
 wire		  [ 1: 0]  action_b_output;
@@ -399,7 +401,8 @@ wire		  [ 1: 0]  action_c_output;
 //
 trade t1(
  .clk(CLOCK_50), //using the 50 MHz clock
- //.reset(reset), //connected, beed to initialize when other things are working
+ .reset(reset), //connected, beed to initialize when other things are working
+ .stock_id(stock_id_input),
  .price_a(price_a_input),  // Price from Exchange A
  .price_b(price_b_input),  // Price from Exchange B
  .price_c(price_c_input),  // Price from Exchange C
@@ -561,7 +564,8 @@ Computer_System The_System (
 	.price_c_export                  (price_c_input),                   //              price_c.export
 	.action_a_export                 (action_a_output),                 //             action_a.export
 	.action_b_export                 (action_b_output),                 //             action_b.export
-	.action_c_export                 (action_c_output)                  //             action_c.export
+	.action_c_export                 (action_c_output),                 //             action_c.export
+	.stock_id_export                 (stock_id_input)                  //             stock_id.export
 );
 
 
@@ -571,85 +575,77 @@ endmodule
 
 
 
-module  trade(
+module trade (
     input clk,
-    //input reset,
-    input wire [15:0] price_a,  // Price from Exchange A
-    input wire [15:0] price_b,  // Price from Exchange B
-    input wire [15:0] price_c,  // Price from Exchange C
-    output reg [1:0] action_a,   // Action for Exchange A
-    output reg [1:0] action_b,   // Action for Exchange B
-    output reg [1:0] action_c    // Action for Exchange C
+    input reset,
+    input [1:0] stock_id,           // Stock ID (00: AAPL, 01: GOOG, etc.)
+    input [15:0] price_a,           // Price from Market A
+    input [15:0] price_b,           // Price from Market B
+    input [15:0] price_c,           // Price from Market C
+    output reg [1:0] action_a,      // Action for Market A
+    output reg [1:0] action_b,      // Action for Market B
+    output reg [1:0] action_c       // Action for Market C
 );
 
+// Parameters for actions
 parameter HOLD = 2'b00, BUY = 2'b01, SELL = 2'b10;
-parameter threshold = 16'd0;
 
-//assign LEDR[1:0] = action_a_output;  // Map actions to LEDs
-//assign LEDR[2]   = 1'b0;
-//assign LEDR[4:3] = action_b_output;
-//assign LEDR[2:5] = 1'b0;
-//assign LEDR[7:6] = action_c_output;
-//assign LEDR[9:8] = 2'b0;
+// Arrays to store the last actions for each market (for multiple stocks)
+reg [1:0] actions_a[3:0]; // Actions for Market A
+reg [1:0] actions_b[3:0]; // Actions for Market B
+reg [1:0] actions_c[3:0]; // Actions for Market C
 
-//always @(*) begin
-//	action_a = 2'd1;
-//	action_b = 2'd2;
-//	action_c = 2'd3;
-//end
-
-
-always @(*) begin
-//    if (reset) begin
-//        action_a = HOLD;
-//        action_b = HOLD;
-//        action_c = HOLD;
-//    end else begin
-        // Reset actions
-        action_a = 2'b11; //unrelated value to signify setup
-        action_b = 2'b11;
-        action_c = 2'b11;
-
-        // Arbitrage conditions
-        if ((price_a > price_b + threshold) && (price_b > price_c + threshold)) begin
-            action_a = SELL;
-            action_b = HOLD;
-            action_c = BUY;
-        end else if ((price_b > price_a + threshold) && (price_a > price_c + threshold)) begin
-            action_a = HOLD;
-            action_b = SELL;
-            action_c = BUY;
-        end else if ((price_a > price_c + threshold) && (price_c > price_b + threshold)) begin
-            action_a = SELL;
-            action_b = BUY;
-            action_c = HOLD;
-        end else if ((price_c > price_a + threshold) && (price_a > price_b + threshold)) begin
-            action_a = HOLD;
-            action_b = BUY;
-            action_c = SELL;
-        end else if ((price_c > price_b + threshold) && (price_b > price_a + threshold)) begin
-            action_a = BUY;
-            action_b = HOLD;
-            action_c = SELL;
-        end else if ((price_b > price_c + threshold) && (price_c > price_a + threshold)) begin
-            action_a = BUY;
-            action_b = SELL;
-            action_c = HOLD;
+always @(posedge clk or posedge reset) begin
+    if (reset) begin
+        // Reset actions for all stocks
+        integer i;
+        for (i = 0; i < 4; i = i + 1) begin
+            actions_a[i] <= HOLD;
+            actions_b[i] <= HOLD;
+            actions_c[i] <= HOLD;
         end
-    //end
+        action_a <= HOLD;
+        action_b <= HOLD;
+        action_c <= HOLD;
+    end else begin
+        // Arbitrage trading logic for current stock_id
+        if ((price_a > price_b) && (price_b > price_c)) begin
+            action_a <= SELL; // Market A has the highest price
+            action_b <= HOLD;
+            action_c <= BUY;  // Market C has the lowest price
+        end else if ((price_b > price_a) && (price_a > price_c)) begin
+            action_a <= HOLD;
+            action_b <= SELL;
+            action_c <= BUY;
+        end else if ((price_c > price_a) && (price_a > price_b)) begin
+            action_a <= BUY;
+            action_b <= HOLD;
+            action_c <= SELL;
+        end else if ((price_a > price_c) && (price_c > price_b)) begin
+            action_a <= SELL;
+            action_b <= BUY;
+            action_c <= HOLD;
+        end else if ((price_c > price_b) && (price_b > price_a)) begin
+            action_a <= BUY;
+            action_b <= HOLD;
+            action_c <= SELL;
+        end else if ((price_b > price_c) && (price_c > price_a)) begin
+            action_a <= HOLD;
+            action_b <= SELL;
+            action_c <= BUY;
+        end else begin
+            // No arbitrage opportunity
+            action_a <= HOLD;
+            action_b <= HOLD;
+            action_c <= HOLD;
+        end
+
+        // Update last actions for the stock_id
+        actions_a[stock_id] <= action_a;
+        actions_b[stock_id] <= action_b;
+        actions_c[stock_id] <= action_c;
+    end
 end
 
-//always @(posedge clk) begin
-//    if (action_a == SELL) $display("Sell A");
-//    else if (action_b == SELL) $display("Sell B");
-//    else if (action_c == SELL) $display("Sell C");
-//    else $display("All HOLD");
-//end
-//
-//always @(posedge clk) begin
-//    if (action_a == BUY) $display("Buy A\n\n");
-//    else if (action_b == BUY) $display("Buy B\n\n");
-//    else if (action_c == BUY) $display("Buy C\n\n");
-//end
-
 endmodule
+
